@@ -252,8 +252,17 @@ function buildInstantlyPayload(campaignId, contact, job, opts = {}) {
         ? opts.customVariableKeys
         : DEFAULT_CUSTOM_VARIABLE_KEYS;
 
+    // NOTE: Instantly v2 API expects the field name `campaign` (UUID), NOT
+    // `campaign_id`. If you send `campaign_id` it gets silently ignored and the
+    // lead is created in the workspace but assigned to NO campaign — the lead
+    // shows up via GET /leads but never inside the campaign's lead list, and
+    // the email sequence never fires. Confirmed against the v2 docs + a live
+    // test where the API returned 200 + a lead id but the campaign list was
+    // empty. Send both keys for safety (some legacy plans may still read _id).
+    const resolvedCampaign = campaignId || opts.campaignId || process.env.INSTANTLY_CAMPAIGN_ID;
     const standard = {
-        campaign_id:          campaignId || opts.campaignId || process.env.INSTANTLY_CAMPAIGN_ID,
+        campaign:             resolvedCampaign,
+        campaign_id:          resolvedCampaign,
         email:                resolveMapped('email',        contact, job, fieldMapping),
         first_name:           resolveMapped('first_name',   contact, job, fieldMapping),
         last_name:            resolveMapped('last_name',    contact, job, fieldMapping),
