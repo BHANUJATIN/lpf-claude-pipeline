@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__browser_batch",
+      "mcp__Claude_in_Chrome__computer",
+      "mcp__Claude_in_Chrome__find",
+      "Bash(node scripts/migrate.js)",
+      "Bash(timeout 5 node server.js)",
+      "Bash(dir D:\\\\Freelance\\\\CTR\\\\claude-based-lpf\\\\LPF-Claude)",
+      "Bash(ls /d/Freelance/CTR/claude-based-lpf/LPF-Claude/scripts 2>&1; echo \"---\"; ls /d/Freelance/CTR/ClaudeworkspaceCTR/CTR 2>&1 | head -30)",
+      "Bash(curl -s --max-time 10 \"http://localhost:3000/jobs?limit=10\")",
+      "WebFetch(domain:de.linkedin.com)",
+      "Bash(node -e \"const d=require\\('./job8.json'\\); console.log\\(Object.keys\\(d.contacts[0]\\).join\\('\\\\n'\\)\\)\")"
+    ]
+  }
+}

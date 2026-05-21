@@ -1,0 +1,40 @@
+{
+  "name": "claude-jpe",
+  "version": "0.2.0",
+  "description": "Local LPF pipeline — replicates Clay LPF workbook end-to-end, outputs to Instantly",
+  "main": "server.js",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "node -e \"console.log('claude-jpe install complete')\"",
+    "dev": "node --watch --watch-path=./src --watch-path=./public server.js",
+    "migrate": "node scripts/migrate.js",
+    "pipeline": "node scripts/pipeline.js",
+    "status": "node scripts/status.js",
+    "logs": "node scripts/logs.js",
+    "seed": "node scripts/seed.js",
+    "test:dry": "node scripts/test-dry.js",
+    "cleanup": "node scripts/cleanup-bad-imports.js",
+    "reset-db": "node scripts/reset-db.js --confirm",
+    "nuke-db": "node scripts/nuke-and-migrate.js --confirm",
+    "migrate:local": "node scripts/migrate-local.js",
+    "migrate:local:reset": "node scripts/migrate-local.js --reset",
+    "seed:local": "node scripts/seed-local.js",
+    "start:local": "node -r dotenv/config server.js dotenv_config_path=.env.test",
+    "status:local": "node -e \"require('dotenv').config({path:'.env.test'}); require('./scripts/status.js');\""
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.4.5",
+    "axios": "^1.7.2",
+    "chalk": "^4.1.2",
+    "cli-table3": "^0.6.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "openai": "^4.52.0",
+    "pdfkit": "^0.18.0",
+    "pg": "^8.12.0",
+    "winston": "^3.14.2"
+  }
+}

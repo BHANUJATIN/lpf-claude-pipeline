@@ -1,0 +1,1 @@
+{"count":1,"logs":[{"id":10,"level":"error","module":"Pipeline","message":"Job [3] failed at stage3_tech","meta":{"error":"column \"tech_longer_abbrev\" of relation \"lpf_jobs\" does not exist"},"created_at":"2026-05-18T03:38:04.652Z"}]}

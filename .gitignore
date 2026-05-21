@@ -1,0 +1,21 @@
+node_modules/
+.env
+.env.local
+.env.test
+*.log
+data/
+.DS_Store
+npm-debug.log*
+yarn-error.log*
+.vscode/
+.idea/
+*.swp
+.pglite/
+
+# build artifacts
+dist/
+build/
+coverage/
+
+# editor / OS
+Thumbs.db
