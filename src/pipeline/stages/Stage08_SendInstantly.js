@@ -126,6 +126,33 @@ class Stage08_SendInstantly {
                     failures.push({ contact_id: contact.id, error: err.message });
                     await this.db.logSend(job.id, contact.id, campaignId, null, null, false, err.message);
                     logger.error(`Instantly send failed for contact ${contact.id}`, { error: err.message });
+
+                    // ── Terminal-error detection ─────────────────────────────
+                    // Some Instantly responses mean "this contact will NEVER be
+                    // accepted no matter how many times we retry" — blocklist,
+                    // invalid email, account-suppression. Mark the contact as
+                    // `send_decision='skipped'` so the stranded-send sweep
+                    // (Pipeline.sweepStrandedContacts) stops banging on it.
+                    // Transient errors (5xx, timeouts) are NOT marked skipped —
+                    // those should be retried on the next sweep tick.
+                    const body    = err.responseBody || {};
+                    const message = String(body.message || '').toLowerCase();
+                    const isTerminal =
+                        message.includes('blocklist') ||
+                        message.includes('block list') ||
+                        message.includes('is invalid') ||
+                        message.includes('not a valid email') ||
+                        message.includes('suppression') ||
+                        message.includes('unsubscribed') ||
+                        (err.status === 400 && message.includes('email'));
+                    if (isTerminal) {
+                        const reason = `Instantly: ${body.message || err.message}`.slice(0, 500);
+                        await this.db.updateContact(contact.id, {
+                            send_decision:    'skipped',
+                            send_skip_reason: reason,
+                        }).catch(() => {});
+                        logger.warn(`Contact ${contact.id} marked skipped — ${reason}`);
+                    }
                 }
             } else if (destination === 'heyreach') {
                 // HeyReach — log for now, implement when API key available

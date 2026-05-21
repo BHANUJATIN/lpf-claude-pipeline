@@ -104,6 +104,17 @@ async function start() {
         console.log('[startup] DB connection OK');
         logger.info('Database connected');
 
+        // ── Inline boot-time micro-migrations ────────────────────────────────
+        // Add new columns added since the last `npm run migrate` run. Each
+        // statement is idempotent (IF NOT EXISTS) so safe to run on every boot.
+        // We don't re-run the full schema.sql to keep boot fast.
+        try {
+            const pool = Database.getInstance().pool;
+            await pool.query(`ALTER TABLE lpf_contacts ADD COLUMN IF NOT EXISTS send_skip_reason TEXT`);
+        } catch (err) {
+            logger.warn('Inline migration failed', { error: err.message });
+        }
+
         // Pull api_key connections into process.env so existing services see them
         try {
             const Connections = require('./src/services/ConnectionService');

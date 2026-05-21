@@ -350,6 +350,11 @@ ALTER TABLE lpf_contacts ADD COLUMN IF NOT EXISTS heyreach_skip_reason         T
 -- provider tried + why each fell through. Shown in the dashboard "no email"
 -- tooltip so the operator knows why we couldn't reach this person.
 ALTER TABLE lpf_contacts ADD COLUMN IF NOT EXISTS email_skip_reason            TEXT;
+-- Per-contact send-skip diagnostic: when Instantly returned a terminal error
+-- (blocklist, invalid email, dup workspace, etc.) we mark `send_decision =
+-- 'skipped'` so the stranded-send sweep stops retrying, and store the human
+-- reason here for the dashboard tooltip.
+ALTER TABLE lpf_contacts ADD COLUMN IF NOT EXISTS send_skip_reason             TEXT;
 ALTER TABLE lpf_contacts ADD COLUMN IF NOT EXISTS heyreach_job_posting_intro          TEXT;
 ALTER TABLE lpf_contacts ADD COLUMN IF NOT EXISTS heyreach_imagined_city_sentence     TEXT;
 ALTER TABLE lpf_contacts ADD COLUMN IF NOT EXISTS heyreach_imagined_industry_sentence TEXT;

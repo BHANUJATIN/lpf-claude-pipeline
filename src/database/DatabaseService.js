@@ -378,7 +378,9 @@ class DatabaseService {
                          // Full RF response body for the Sent ✅ drawer
                          'heyreach_response',
                          // Per-contact email-skip diagnostic (why we couldn't find this contact's email)
-                         'email_skip_reason'];
+                         'email_skip_reason',
+                         // Per-contact send-skip diagnostic (e.g. "Instantly: Lead is in blocklist")
+                         'send_skip_reason'];
         const jsonbFields = new Set(['heyreach_response']);
         const sets    = [];
         const vals    = [contactId];
