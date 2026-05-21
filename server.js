@@ -26,6 +26,45 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CORS — Cross-Origin Resource Sharing
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Permissive by default so JPE (Heroku app, different domain), the Next.js
+// dashboard (different port in dev), and any future browser-based caller can
+// POST to /webhook/* and read /api/* without preflight failures.
+//
+// Allow-list override: set CORS_ALLOWED_ORIGINS to a comma-separated list of
+// origins to restrict (e.g. `CORS_ALLOWED_ORIGINS=https://jpe.herokuapp.com,
+// https://lpf-claude-dashboard.com`). Leave unset → wildcard `*`, which is
+// safe for write endpoints that are protected by their own auth gate (webhook
+// payload validation + dedup, API-key-protected admin routes).
+const allowOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (allowOrigins.length === 0) {
+        // No allow-list configured → wildcard. Note `*` is incompatible with
+        // credentials:include cookies — that's fine, our webhook is anonymous.
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    } else if (origin && allowOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+    }
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-Api-Key, X-API-KEY, X-Source, X-Webhook-Token, X-Requested-With');
+    res.setHeader('Access-Control-Max-Age', '86400');
+
+    // Short-circuit OPTIONS preflight — no need to walk the route handlers
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end();
+    }
+    next();
+});
+
 app.use((req, _res, next) => {
     logger.debug(`${req.method} ${req.path}`);
     next();
