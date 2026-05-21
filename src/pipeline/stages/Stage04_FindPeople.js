@@ -109,6 +109,21 @@ class Stage04_FindPeople {
     constructor(db) { this.db = db; }
 
     async run(job) {
+        // Belt-and-braces: don't find people for a rejected job. The orchestrator
+        // already halts via `return 'rejected'` in Pipeline.js when an earlier
+        // stage rejects, but if Stage 4 ever gets invoked directly (rerun, manual
+        // trigger, future endpoint) we must bail before spending Apollo credits
+        // and OpenAI tokens on a job that won't reach Stage 8 anyway.
+        if (job.stage === 'rejected') {
+            logger.warn(`Stage 4 skipped — job ${job.id} is already rejected (${job.rejection_reason || 'no reason'})`);
+            return {
+                rejected: false,        // don't double-reject; just no-op
+                message:  `Skipped — job already rejected: ${job.rejection_reason || 'unknown reason'}`,
+                fields:   {},
+                summary:  { eligible: 0, found: 0, skipped_reason: 'job_rejected' },
+            };
+        }
+
         const domain    = cleanDomain(job.company_domain) || cleanDomain(job.company_url);
         const locations = countryToLocations(job.country);
 

@@ -160,6 +160,21 @@ router.post('/admin/resume-inflight', async (_req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// POST /admin/sweep-sends            — actually send stranded contacts now
+// POST /admin/sweep-sends?dry=true   — preview without sending
+// Scans every 'completed' job within retention window for contacts that have an
+// email but were never sent to Instantly (e.g. bug-era inserts, late-stage
+// adds). Re-runs Stage 8 for those jobs — idempotent thanks to
+// `sent_to_instantly` + Instantly's `skip_if_in_workspace`.
+router.post('/admin/sweep-sends', async (req, res) => {
+    try {
+        const Pipeline = require('../pipeline/Pipeline');
+        const dryRun   = req.query.dry === 'true' || req.body?.dryRun === true;
+        const r = await new Pipeline().sweepStrandedContacts({ dryRun });
+        res.json(r);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Connection helpers — fetch campaigns + custom variables + save mapping
 // ─────────────────────────────────────────────────────────────────────────────

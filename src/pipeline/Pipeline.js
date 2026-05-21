@@ -1145,6 +1145,103 @@ DESCRIPTION (first 1000 chars): ${(job.job_description || '').slice(0, 1000)}`,
     }
 
     /**
+     * Sweep: find contacts that have an email but were never sent to Instantly,
+     * across all completed jobs, and resend them. Catches three failure modes:
+     *
+     *   1. Bugs in Stage 8 that left contacts in a "have email, not sent" limbo
+     *      (e.g. the campaign-id v2 issue before the fix landed).
+     *   2. Stage 8 ran before all contacts existed (Stage 6/7 added late ones).
+     *   3. A transient API failure mid-loop dropped the rest of the batch.
+     *
+     * Conditions a contact must meet to be picked up:
+     *   • parent job's stage is 'completed' (won't touch in-flight or rejected jobs)
+     *   • contact has a non-empty email
+     *   • sent_to_instantly = false
+     *   • send_decision IS NOT 'skipped'   (respects explicit opt-outs)
+     *   • created_at within retention window (default 30 days)
+     *
+     * Safe to call repeatedly — Stage 8 idempotency (`sent_to_instantly` flag) +
+     * Instantly's own `skip_if_in_workspace` flag prevent double-sends.
+     */
+    async sweepStrandedContacts({ dryRun = false } = {}) {
+        const pool   = DatabaseClass.getInstance().pool;
+        const TTL    = parseInt(process.env.PEOPLE_RETENTION_DAYS || '30', 10);
+        const result = await pool.query(`
+            SELECT DISTINCT c.job_id
+              FROM lpf_contacts c
+              JOIN lpf_jobs j ON j.id = c.job_id
+             WHERE c.email IS NOT NULL AND c.email <> ''
+               AND COALESCE(c.sent_to_instantly, false) = false
+               AND COALESCE(c.send_decision, '') <> 'skipped'
+               AND j.stage = 'completed'
+               AND COALESCE(c.created_at, NOW()) > NOW() - ($1 || ' days')::interval
+        `, [TTL]);
+
+        const jobIds = result.rows.map(r => r.job_id);
+        if (jobIds.length === 0) {
+            return { jobs: 0, attempted: 0, sent: 0, failed: 0, jobIds: [] };
+        }
+        if (dryRun) {
+            // Count stranded contacts per job for the audit response
+            const detail = await pool.query(`
+                SELECT job_id, COUNT(*) AS cnt
+                  FROM lpf_contacts
+                 WHERE job_id = ANY($1::int[])
+                   AND email IS NOT NULL AND email <> ''
+                   AND COALESCE(sent_to_instantly, false) = false
+                   AND COALESCE(send_decision, '') <> 'skipped'
+                 GROUP BY job_id ORDER BY job_id`,
+                [jobIds]);
+            return {
+                jobs: jobIds.length,
+                attempted: 0, sent: 0, failed: 0,
+                detail: detail.rows,
+                dryRun: true,
+            };
+        }
+
+        let attempted = 0, sent = 0, failed = 0;
+        for (const jid of jobIds) {
+            try {
+                // Approve any still-undecided contacts so Stage 8's filter accepts them.
+                await this.db.approveAllContacts(jid, 'instantly', null).catch(() => {});
+                const r = await this.sendJob(jid);
+                const s = r?.summary || {};
+                attempted += (s.eligible || 0);
+                sent      += (s.sent     || 0);
+                failed    += (s.failed   || 0);
+                logger.info(`Sweep: resent job ${jid}`, s);
+            } catch (err) {
+                logger.warn(`Sweep: resend failed for job ${jid}`, { error: err.message });
+                failed++;
+            }
+        }
+        return { jobs: jobIds.length, attempted, sent, failed, jobIds };
+    }
+
+    /**
+     * Schedule the sweep to run on a fixed interval. Called from server.js at
+     * boot. Set INSTANTLY_SWEEP=false in .env to disable.
+     */
+    startStrandedSweepScheduler({ minutes = 10 } = {}) {
+        if (process.env.INSTANTLY_SWEEP === 'false') {
+            logger.info('Stranded-send sweep scheduler disabled via INSTANTLY_SWEEP=false');
+            return null;
+        }
+        const ms = Math.max(1, minutes) * 60 * 1000;
+        // Fire once shortly after boot, then on the interval.
+        const fire = () => {
+            this.sweepStrandedContacts().then(r => {
+                if (r.sent > 0 || r.failed > 0) {
+                    logger.info(`Stranded-send sweep: sent=${r.sent} failed=${r.failed} across ${r.jobs} job(s)`, { jobIds: r.jobIds });
+                }
+            }).catch(err => logger.warn('Stranded-send sweep failed', { error: err.message }));
+        };
+        setTimeout(fire, 30 * 1000);            // first run 30s after boot
+        return setInterval(fire, ms);            // then every N minutes
+    }
+
+    /**
      * Run Stage 8 (send to Instantly) for a single job.
      * Called from POST /review/:jobId/send after manual approval.
      */

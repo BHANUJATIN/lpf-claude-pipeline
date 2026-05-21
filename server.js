@@ -121,6 +121,18 @@ async function start() {
             logger.warn('Could not start retention scheduler', { error: err.message });
         }
 
+        // Stranded-send sweep scheduler — finds contacts that have an email but
+        // weren't sent (e.g. bug-era jobs, late-stage Stage 6/7 inserts, mid-loop
+        // failures) and pushes them through Stage 8 again. Idempotent; safe to
+        // run repeatedly. See Pipeline.sweepStrandedContacts(). Disable via
+        // INSTANTLY_SWEEP=false in .env.
+        try {
+            const Pipeline = require('./src/pipeline/Pipeline');
+            new Pipeline().startStrandedSweepScheduler({ minutes: parseInt(process.env.INSTANTLY_SWEEP_MIN || '10', 10) });
+        } catch (err) {
+            logger.warn('Could not start stranded-send sweep scheduler', { error: err.message });
+        }
+
         // Boot-resume: jobs that were mid-pipeline when the previous process died
         // (most commonly because `node --watch` restarted on a file edit) get
         // re-queued automatically. See BootResume.js. Fire-and-forget — keeps
