@@ -119,17 +119,33 @@ async function addLead(campaignId, contact, jobContext, opts = {}) {
     // builder so a saved connection's mapping overrides the default resolvers.
     const payload = buildInstantlyPayload(campaignId, contact, jobContext, opts);
 
-    const res = await axios.post(
-        `${BASE_URL}/leads`,
-        payload,
-        {
-            headers: {
-                Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}`,
-                'Content-Type': 'application/json',
-            },
-        }
-    );
-    return res.data;
+    try {
+        const res = await axios.post(
+            `${BASE_URL}/leads`,
+            payload,
+            {
+                headers: {
+                    Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+            }
+        );
+        return res.data;
+    } catch (err) {
+        // Re-throw with the actual response body baked into err.message so the
+        // operator can see WHY Instantly rejected the lead (validation, dup,
+        // bad campaign id, etc.) instead of just "Request failed with status
+        // code 400". Without this we lose all diagnostic value.
+        const status = err.response?.status;
+        const body   = err.response?.data;
+        const bodyStr = typeof body === 'string' ? body : JSON.stringify(body);
+        const reason  = bodyStr ? ` — body: ${bodyStr.slice(0, 800)}` : '';
+        const wrapped = new Error(`Instantly POST /leads failed (HTTP ${status})${reason}`);
+        wrapped.status        = status;
+        wrapped.responseBody  = body;
+        wrapped.requestPayload = payload;
+        throw wrapped;
+    }
 }
 
 /**
